@@ -1,0 +1,30 @@
+[package]
+name = "ism330is-rs"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.85.1"
+readme = "README.md"
+license = "BSD-3-Clause"
+categories = ["embedded", "no-std"]
+keywords = ["st", "mems", "imu", "ispu", "mlc"]
+repository = "https://github.com/STMicroelectronics/ism330is-rs"
+description = """
+    Platform-agnostic driver for the ISM330IS 6-axis IMU with integrated ISPU for edge AI, sensor hub
+    support, programmable interrupts, and ultra-low-power operation.
+"""
+
+[dependencies]
+embedded-hal = "1.0.0"
+bitfield-struct = "0.10.0"
+half = { version = "1.7", default-features = false }
+st-mems-bus = "1.0.0"
+derive_more = { version = "2.0.1", default-features = false, features = ["try_from"] }
+st-mem-bank-macro = "1.0.0"
+
+# By default the bit order is assumed as Least Significant Bit.
+[features]
+default = []
+passthrough = []
+bit_order_msb = []
+
+
