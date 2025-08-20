@@ -20,10 +20,7 @@ embedded-io = "0.6.0"
 embedded-io-async = "0.6.1"
 libm = "0.2.15"
 st-mems-bus = "1.0.0"
-
-[dependencies.ism330is-rs]
-path = "../../"
-default-features = false
+ism330is-rs = "1.0.0"
 
 [dependencies.panic-probe]
 version = "0.3"

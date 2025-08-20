@@ -13,10 +13,7 @@ embedded-hal = "1.0.0"
 libm = "0.2.15"
 panic-halt = "0.2.0"
 st-mems-bus = "1.0.0"
-
-[dependencies.ism330is-rs]
-path = "../../"
-default-features = false
+ism330is-rs = "1.0.0"
 
 # Uncomment for the panic example.
 # panic-itm = "0.4.1"
