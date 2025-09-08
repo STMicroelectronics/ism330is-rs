@@ -2,7 +2,7 @@
 
 This example demonstrates how to configure and read **ISPU (Intelligent Sensor Processing Unit)** normalization data from the **ISM330IS** inertial measurement unit (IMU) sensor using an **STM32F401RE** microcontroller board with the **Embassy** asynchronous executor framework. The ISPU block is a programmable core embedded in the sensor that processes raw accelerometer and gyroscope data to provide normalized outputs and other advanced processing results.
 
-The program loads a predefined ISPU configuration (UCF file), initializes the sensor, and continuously reads normalized data samples upon interrupt, outputting the results via UART.
+The program loads a predefined ISPU configuration (JSON file), initializes the sensor, and continuously reads normalized data samples upon interrupt, outputting the results via UART.
 
 ---
 
@@ -42,7 +42,7 @@ The ISM330IS sensor is connected to the STM32F401RE via the I2C1 peripheral on p
 - The ISM330IS sensor is initialized over I2C with the low I2C address.
 - The device ID is read and verified to confirm sensor presence.
 - The sensor is reset to default configuration.
-- The ISPU normalization program is loaded from a UCF-generated Rust array (`NORM`).
+- The ISPU normalization program is loaded from a JSON-generated Rust array (`NORM`).
 - The ISPU data rate is read and printed over UART.
 
 ### Data Acquisition Loop
