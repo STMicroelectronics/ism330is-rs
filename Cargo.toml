@@ -13,6 +13,9 @@ description = """
     support, programmable interrupts, and ultra-low-power operation.
 """
 
+[lib]
+doctest = false
+
 [dependencies]
 embedded-hal = "1.0.0"
 bitfield-struct = "0.10.0"
