@@ -1,10 +1,11 @@
-use crate::Error;
-use crate::Ism330is;
+use super::super::{
+    BusOperation, DelayNs, Error, Ism330is, RegisterOperation, SensorOperation, bisync,
+    register::{BankState, MainBank},
+};
+
 use bitfield_struct::bitfield;
 use derive_more::TryFrom;
-use embedded_hal::delay::DelayNs;
 use st_mem_bank_macro::{named_register, register};
-use st_mems_bus::BusOperation;
 
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq)]
@@ -64,7 +65,7 @@ pub enum Reg {
 /// FUNC_CFG_ACCESS (0x01)
 ///
 /// Enable ISPU / sensor hub functions register (R/W)
-#[register(address = Reg::FuncCfgAccess, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::FuncCfgAccess, access_type = "Ism330is<B, T, S>", multi_state = true)]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct FuncCfgAccess {
@@ -89,7 +90,7 @@ pub struct FuncCfgAccess {
 /// PIN_CTRL (0x02)
 ///
 /// SDO pin pull-up register (R/W)
-#[register(address = Reg::PinCtrl, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::PinCtrl, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct PinCtrl {
@@ -107,7 +108,7 @@ pub struct PinCtrl {
 /// DRDY_PULSED_REG (0x0B)
 ///
 /// Pulsed data-ready mode register (R/W)
-#[register(address = Reg::DrdyPulsedReg, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::DrdyPulsedReg, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct DrdyPulsedReg {
@@ -124,7 +125,7 @@ pub struct DrdyPulsedReg {
 ///
 /// INT1 pin control register (R/W)
 /// Output on INT1 pin is OR combination of signals selected here and in MD1_CFG (0x5E).
-#[register(address = Reg::Int1Ctrl, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::Int1Ctrl, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Int1Ctrl {
@@ -148,7 +149,7 @@ pub struct Int1Ctrl {
 ///
 /// INT2 pin control register (R/W)
 /// Output on INT2 pin is OR combination of signals selected here and in MD2_CFG (0x5F).
-#[register(address = Reg::Int2Ctrl, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::Int2Ctrl, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Int2Ctrl {
@@ -177,7 +178,7 @@ pub struct Int2Ctrl {
 ///
 /// WHO_AM_I register (R)
 /// Read-only register fixed at 0x22.
-#[register(address = Reg::WhoAmI, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::WhoAmI, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct WhoAmI {
@@ -189,7 +190,7 @@ pub struct WhoAmI {
 /// CTRL1_XL (0x10)
 ///
 /// Control register 1 for accelerometer (R/W)
-#[register(address = Reg::Ctrl1Xl, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::Ctrl1Xl, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Ctrl1Xl {
@@ -211,7 +212,7 @@ pub struct Ctrl1Xl {
 /// CTRL2_G (0x11)
 ///
 /// Control register 2 for gyroscope (R/W)
-#[register(address = Reg::Ctrl2G, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::Ctrl2G, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Ctrl2G {
@@ -238,7 +239,7 @@ pub struct Ctrl2G {
 /// CTRL3_C (0x12)
 ///
 /// Control register 3 (R/W)
-#[register(address = Reg::Ctrl3C, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::Ctrl3C, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Ctrl3C {
@@ -282,7 +283,7 @@ pub struct Ctrl3C {
 /// CTRL4_C (0x13)
 ///
 /// Control register 4 (R/W)
-#[register(address = Reg::Ctrl4C, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::Ctrl4C, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Ctrl4C {
@@ -312,7 +313,7 @@ pub struct Ctrl4C {
 /// CTRL5_C (0x14)
 ///
 /// Control register 5 (R/W)
-#[register(address = Reg::Ctrl5C, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::Ctrl5C, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Ctrl5C {
@@ -333,7 +334,7 @@ pub struct Ctrl5C {
 /// CTRL6_C (0x15)
 ///
 /// Control register 6 (R/W)
-#[register(address = Reg::Ctrl6C, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::Ctrl6C, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Ctrl6C {
@@ -351,7 +352,7 @@ pub struct Ctrl6C {
 /// CTRL7_G (0x16)
 ///
 /// Control register 7 (R/W)
-#[register(address = Reg::Ctrl7G, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::Ctrl7G, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Ctrl7G {
@@ -367,7 +368,7 @@ pub struct Ctrl7G {
 /// CTRL9_C (0x18)
 ///
 /// Control register 9 (R/W)
-#[register(address = Reg::Ctrl9C, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::Ctrl9C, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Ctrl9C {
@@ -403,7 +404,7 @@ pub struct Ctrl9C {
 /// - ISPU_CLK_SEL: Selects ISPU core clock frequency.
 ///   0: core clock frequency set to 5 MHz (default)
 ///   1: core clock frequency set to 10 MHz
-#[register(address = Reg::Ctrl10C, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::Ctrl10C, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Ctrl10C {
@@ -419,7 +420,7 @@ pub struct Ctrl10C {
     pub not_used2: u8,
 }
 
-#[register(address = Reg::IspuIntStatus0Mainpage, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::IspuIntStatus0Mainpage, access_type = "Ism330is<B, T, MainBank>")]
 pub struct IspuIntStatusMainPage(pub u32);
 
 /// STATUS_REG (0x1E)
@@ -430,7 +431,7 @@ pub struct IspuIntStatusMainPage(pub u32);
 /// - GDA: Gyroscope new data available. 0: no new data; 1: new data available.
 /// - TDA: Temperature new data available. 0: no new data; 1: new data available.
 /// - TIMESTAMP_ENDCOUNT: Alerts timestamp overflow within 6.4 ms.
-#[register(address = Reg::StatusReg, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::StatusReg, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct StatusReg {
@@ -451,7 +452,7 @@ pub struct StatusReg {
 /// Temperature data output register (R).
 ///
 /// The value is expressed as a 16-bit word in two’s complement.
-#[register(address = Reg::OutTempL, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::OutTempL, access_type = "Ism330is<B, T, MainBank>")]
 pub struct OutTemp(pub i16);
 
 /// OUTX_L_G - OUTZ_H_G (0x22 - 0x27)
@@ -461,7 +462,7 @@ pub struct OutTemp(pub i16);
 /// The value is expressed as a 16-bit word in two’s complement.
 /// Data is according to the full-scale and ODR settings
 /// (CTRL2_G (11h)) of the gyroscope.
-#[named_register(address = Reg::OutxLG, access_type = Ism330is, generics = 2)]
+#[named_register(address = Reg::OutxLG, access_type = "Ism330is<B, T, MainBank>")]
 pub struct OutXYZG {
     pub x: i16,
     pub y: i16,
@@ -474,7 +475,7 @@ pub struct OutXYZG {
 ///
 /// The value is expressed as a 16-bit word in two’s complement.
 /// Data are according to the full-scale and ODR settings (CTRL1_XL (10h)) of the accelerometer
-#[named_register(address = Reg::OutxLA, access_type = Ism330is, generics = 2)]
+#[named_register(address = Reg::OutxLA, access_type = "Ism330is<B, T, MainBank>")]
 pub struct OutXYZA {
     pub x: i16,
     pub y: i16,
@@ -489,7 +490,7 @@ pub struct OutXYZA {
 ///   0: communication not concluded; 1: communication concluded.
 /// - SLAVE0_NACK to SLAVE3_NACK: Not acknowledge flags for slaves 0 to 3.
 /// - WR_ONCE_DONE: Write operation on slave 0 completed when WRITE_ONCE bit in MASTER_CONFIG (0x14) is set.
-#[register(address = Reg::StatusMasterMainpage, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::StatusMasterMainpage, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct StatusMasterMainpage {
@@ -509,7 +510,7 @@ pub struct StatusMasterMainpage {
     pub wr_once_done: u8,
 }
 
-#[register(address = Reg::Timestamp0, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::Timestamp0, access_type = "Ism330is<B, T, MainBank>")]
 pub struct Timestamp(pub u32);
 
 /// MD1_CFG (0x5E)
@@ -518,7 +519,7 @@ pub struct Timestamp(pub u32);
 ///
 /// - INT1_SHUB: Routing sensor hub communication concluded event to INT1 pin.
 /// - INT1_ISPU: Routing ISPU event to INT1 pin.
-#[register(address = Reg::Md1Cfg, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::Md1Cfg, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Md1Cfg {
@@ -536,7 +537,7 @@ pub struct Md1Cfg {
 ///
 /// - INT2_TIMESTAMP: Enables routing alert for timestamp overflow within 6.4 ms to INT2 pin.
 /// - INT2_ISPU: Routing ISPU event to INT2 pin.
-#[register(address = Reg::Md2Cfg, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::Md2Cfg, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Md2Cfg {
@@ -554,7 +555,7 @@ pub struct Md2Cfg {
 ///
 /// - FREQ_FINE[7:0]: Difference in percentage of effective ODR and timestamp rate with respect to typical.
 ///   Step: 0.15%. 8-bit two's complement format.
-#[register(address = Reg::InternalFreqFine, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::InternalFreqFine, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct InternalFreqFine {
@@ -565,7 +566,7 @@ pub struct InternalFreqFine {
 /// ISPU_DUMMY_CFG_1_L (0x73)
 ///
 /// General-purpose input configuration register 1 for ISPU (R/W)
-#[register(address = Reg::IspuDummyCfg1L, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::IspuDummyCfg1L, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDummyCfg1L {
@@ -576,7 +577,7 @@ pub struct IspuDummyCfg1L {
 /// ISPU_DUMMY_CFG_1_H (0x74)
 ///
 /// General-purpose input configuration register 1 for ISPU (R/W)
-#[register(address = Reg::IspuDummyCfg1H, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::IspuDummyCfg1H, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDummyCfg1H {
@@ -587,7 +588,7 @@ pub struct IspuDummyCfg1H {
 /// ISPU_DUMMY_CFG_2_L (0x75)
 ///
 /// General-purpose input configuration register 2 for ISPU (R/W)
-#[register(address = Reg::IspuDummyCfg2L, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::IspuDummyCfg2L, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDummyCfg2L {
@@ -598,7 +599,7 @@ pub struct IspuDummyCfg2L {
 /// ISPU_DUMMY_CFG_2_H (0x76)
 ///
 /// General-purpose input configuration register 2 for ISPU (R/W)
-#[register(address = Reg::IspuDummyCfg2H, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::IspuDummyCfg2H, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDummyCfg2H {
@@ -609,7 +610,7 @@ pub struct IspuDummyCfg2H {
 /// ISPU_DUMMY_CFG_3_L (0x77)
 ///
 /// General-purpose input configuration register 3 for ISPU (R/W)
-#[register(address = Reg::IspuDummyCfg3L, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::IspuDummyCfg3L, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDummyCfg3L {
@@ -620,7 +621,7 @@ pub struct IspuDummyCfg3L {
 /// ISPU_DUMMY_CFG_3_H (0x78)
 ///
 /// General-purpose input configuration register 3 for ISPU (R/W)
-#[register(address = Reg::IspuDummyCfg3H, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::IspuDummyCfg3H, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDummyCfg3H {
@@ -631,7 +632,7 @@ pub struct IspuDummyCfg3H {
 /// ISPU_DUMMY_CFG_4_L (0x79)
 ///
 /// General-purpose input configuration register 4 for ISPU (R/W)
-#[register(address = Reg::IspuDummyCfg4L, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::IspuDummyCfg4L, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDummyCfg4L {
@@ -642,7 +643,7 @@ pub struct IspuDummyCfg4L {
 /// ISPU_DUMMY_CFG_4_H (0x7A)
 ///
 /// General-purpose input configuration register 4 for ISPU (R/W)
-#[register(address = Reg::IspuDummyCfg4H, access_type = Ism330is, generics = 2)]
+#[register(address = Reg::IspuDummyCfg4H, access_type = "Ism330is<B, T, MainBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDummyCfg4H {

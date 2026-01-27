@@ -1,10 +1,11 @@
-use super::SensorHubState;
-use crate::Error;
+use super::super::{
+    BusOperation, DelayNs, Error, Ism330is, RegisterOperation, SensorOperation, bisync,
+    register::SensorHubBank,
+};
+
 use bitfield_struct::bitfield;
 use derive_more::TryFrom;
-use embedded_hal::delay::DelayNs;
 use st_mem_bank_macro::register;
-use st_mems_bus::BusOperation;
 
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq)]
@@ -49,7 +50,7 @@ pub enum SensHubReg {
 /// Sensor hub output register (R)
 /// First byte associated to external sensors.
 /// Content consistent with SLVx_CONFIG number of read operation configurations.
-#[register(address = SensHubReg::SensorHub1, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::SensorHub1, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct SensorHub1 {
@@ -279,7 +280,7 @@ pub struct SensorHub18 {
 ///   0: write operation each cycle; 1: only first cycle.
 /// - RST_MASTER_REGS: Resets master logic and output registers.
 ///   Must be set to 1 then 0.
-#[register(address = SensHubReg::MasterConfig, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::MasterConfig, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct MasterConfig {
@@ -306,7 +307,7 @@ pub struct MasterConfig {
 /// - RW_0: Read/write operation on sensor 1.
 ///   0: write operation; 1: read operation.
 /// - SLAVE0_ADD[6:0]: I²C slave address of sensor 1.
-#[register(address = SensHubReg::Slv0Add, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::Slv0Add, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Slv0Add {
@@ -319,7 +320,7 @@ pub struct Slv0Add {
 /// SLV0_SUBADD (0x16)
 ///
 /// Address of register on the first external sensor (sensor 1) (R/W)
-#[register(address = SensHubReg::Slv0Subadd, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::Slv0Subadd, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Slv0Subadd {
@@ -337,7 +338,7 @@ pub struct Slv0Subadd {
 ///   01: 52 Hz
 ///   10: 26 Hz
 ///   11: 12.5 Hz
-#[register(address = SensHubReg::Slv0Config, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::Slv0Config, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Slv0Config {
@@ -356,7 +357,7 @@ pub struct Slv0Config {
 /// - R_1: Enables read operation on sensor 2.
 ///   0: disabled; 1: enabled.
 /// - SLAVE1_ADD[6:0]: I²C slave address of sensor 2.
-#[register(address = SensHubReg::Slv1Add, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::Slv1Add, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Slv1Add {
@@ -369,7 +370,7 @@ pub struct Slv1Add {
 /// SLV1_SUBADD (0x19)
 ///
 /// Address of register on the second external sensor (sensor 2) (R/W)
-#[register(address = SensHubReg::Slv1Subadd, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::Slv1Subadd, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Slv1Subadd {
@@ -382,7 +383,7 @@ pub struct Slv1Subadd {
 /// Second external sensor (sensor 2) configuration register (R/W)
 ///
 /// - SLAVE1_NUMOP[2:0]: Number of read operations on sensor 2.
-#[register(address = SensHubReg::Slv1Config, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::Slv1Config, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Slv1Config {
@@ -399,7 +400,7 @@ pub struct Slv1Config {
 /// - R_2: Enables read operation on sensor 3.
 ///   0: disabled; 1: enabled.
 /// - SLAVE2_ADD[6:0]: I²C slave address of sensor 3.
-#[register(address = SensHubReg::Slv2Add, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::Slv2Add, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Slv2Add {
@@ -412,7 +413,7 @@ pub struct Slv2Add {
 /// SLV2_SUBADD (0x1C)
 ///
 /// Address of register on the third external sensor (sensor 3) (R/W)
-#[register(address = SensHubReg::Slv2Subadd, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::Slv2Subadd, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Slv2Subadd {
@@ -425,7 +426,7 @@ pub struct Slv2Subadd {
 /// Third external sensor (sensor 3) configuration register (R/W)
 ///
 /// - SLAVE2_NUMOP[2:0]: Number of read operations on sensor 3.
-#[register(address = SensHubReg::Slv2Config, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::Slv2Config, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Slv2Config {
@@ -442,7 +443,7 @@ pub struct Slv2Config {
 /// - R_3: Enables read operation on sensor 4.
 ///   0: disabled; 1: enabled.
 /// - SLAVE3_ADD[6:0]: I²C slave address of sensor 4.
-#[register(address = SensHubReg::Slv3Add, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::Slv3Add, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Slv3Add {
@@ -455,7 +456,7 @@ pub struct Slv3Add {
 /// SLV3_SUBADD (0x1F)
 ///
 /// Address of register on the fourth external sensor (sensor 4) (R/W)
-#[register(address = SensHubReg::Slv3Subadd, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::Slv3Subadd, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Slv3Subadd {
@@ -468,7 +469,7 @@ pub struct Slv3Subadd {
 /// Fourth external sensor (sensor 4) configuration register (R/W)
 ///
 /// - SLAVE3_NUMOP[2:0]: Number of read operations on sensor 4.
-#[register(address = SensHubReg::Slv3Config, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::Slv3Config, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct Slv3Config {
@@ -481,7 +482,7 @@ pub struct Slv3Config {
 /// DATAWRITE_SLV0 (0x21)
 ///
 /// Data to be written into the slave device register (R/W)
-#[register(address = SensHubReg::DatawriteSlv0, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::DatawriteSlv0, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct DatawriteSlv0 {
@@ -497,7 +498,7 @@ pub struct DatawriteSlv0 {
 ///   0: communication not concluded; 1: communication concluded.
 /// - SLAVE0_NACK to SLAVE3_NACK: Not acknowledge flags for slaves 0 to 3.
 /// - WR_ONCE_DONE: Write operation on slave 0 completed when WRITE_ONCE bit in MASTER_CONFIG (0x14) is set.
-#[register(address = SensHubReg::StatusMaster, access_type = SensorHubState, generics = 2)]
+#[register(address = SensHubReg::StatusMaster, access_type = "Ism330is<B, T, SensorHubBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct StatusMaster {

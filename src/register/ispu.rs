@@ -1,10 +1,11 @@
-use super::IspuState;
-use crate::Error;
+use super::super::{
+    BusOperation, DelayNs, Error, Ism330is, RegisterOperation, SensorOperation, bisync,
+    register::IspuBank,
+};
+
 use bitfield_struct::bitfield;
 use derive_more::TryFrom;
-use embedded_hal::delay::DelayNs;
 use st_mem_bank_macro::register;
-use st_mems_bus::BusOperation;
 
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq)]
@@ -109,7 +110,7 @@ pub enum IspuReg {
 /// - CLK_DIS: When active, stops the clock of ISPU.
 /// - LATCHED: Configures interrupt generation.
 ///   0: interrupt pulsed; 1: interrupt latched.
-#[register(address = IspuReg::IspuConfig, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuConfig, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuConfig {
@@ -131,7 +132,7 @@ pub struct IspuConfig {
 ///
 /// - BOOT_END: End of ISPU boot procedure.
 /// - Other bits are reserved and read-only.
-#[register(address = IspuReg::IspuStatus, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuStatus, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuStatus {
@@ -153,7 +154,7 @@ pub struct IspuStatus {
 /// - READ_MEM_EN: Enables reading from program or data memories.
 ///   0: disabled (default)
 ///   1: enabled
-#[register(address = IspuReg::IspuMemSel, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuMemSel, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuMemSel {
@@ -172,7 +173,7 @@ pub struct IspuMemSel {
 /// ISPU memory address register (R/W)
 ///
 /// 16-bit address to be read/written.
-#[register(address = IspuReg::IspuMemAddr0, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuMemAddr0, access_type = "Ism330is<B, T, IspuBank>")]
 pub struct IspuMemAddr(pub u16);
 
 /// ISPU_MEM_DATA (0x0B)
@@ -180,7 +181,7 @@ pub struct IspuMemAddr(pub u16);
 /// ISPU memory data register (R/W)
 ///
 /// Byte to write to memory in write transaction or data read from memory in read transaction.
-#[register(address = IspuReg::IspuMemData, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuMemData, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuMemData {
@@ -193,7 +194,7 @@ pub struct IspuMemData {
 /// Interface to ISPU register (R/W, set only)
 ///
 /// 16-bit general purpose bits which can be set from the interface and cleared by ISPU.
-#[register(address = IspuReg::IspuIf2sFlagL, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuIf2sFlagL, access_type = "Ism330is<B, T, IspuBank>")]
 pub struct IspuIf2sFlag(pub u16);
 
 /// ISPU_S2IF_FLAG (0x0E, 0x0F)
@@ -201,11 +202,11 @@ pub struct IspuIf2sFlag(pub u16);
 /// ISPU to interface register (R/W, clear only)
 ///
 /// 16-bit general purpose bits which can be set from ISPU and cleared by the interface.
-#[register(address = IspuReg::IspuS2ifFlagL, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuS2ifFlagL, access_type = "Ism330is<B, T, IspuBank>")]
 pub struct IspuS2ifFlag(pub u16);
 
 /// ISPU_S2IF_FLAG_L (0x0E)
-#[register(address = IspuReg::IspuS2ifFlagL, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuS2ifFlagL, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuS2ifFlagL {
@@ -214,7 +215,7 @@ pub struct IspuS2ifFlagL {
 }
 
 /// ISPU_S2IF_FLAG_H (0x0F)
-#[register(address = IspuReg::IspuS2ifFlagH, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuS2ifFlagH, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuS2ifFlagH {
@@ -225,7 +226,7 @@ pub struct IspuS2ifFlagH {
 /// ISPU_DOUT_00_L (0x10)
 ///
 /// ISPU output register 0 low byte (R)
-#[register(address = IspuReg::IspuDout00L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout00L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout00L {
@@ -236,7 +237,7 @@ pub struct IspuDout00L {
 /// ISPU_DOUT_00_H (0x11)
 ///
 /// ISPU output register 0 high byte (R)
-#[register(address = IspuReg::IspuDout00H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout00H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout00H {
@@ -247,7 +248,7 @@ pub struct IspuDout00H {
 /// ISPU_DOUT_01_L (0x12)
 ///
 /// ISPU output register 01 low byte (R)
-#[register(address = IspuReg::IspuDout01L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout01L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout01L {
@@ -258,7 +259,7 @@ pub struct IspuDout01L {
 /// ISPU_DOUT_01_H (0x13)
 ///
 /// ISPU output register 01 high byte (R)
-#[register(address = IspuReg::IspuDout01H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout01H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout01H {
@@ -269,7 +270,7 @@ pub struct IspuDout01H {
 /// ISPU_DOUT_02_L (0x14)
 ///
 /// ISPU output register 02 low byte (R)
-#[register(address = IspuReg::IspuDout02L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout02L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout02L {
@@ -280,7 +281,7 @@ pub struct IspuDout02L {
 /// ISPU_DOUT_02_H (0x15)
 ///
 /// ISPU output register 02 high byte (R)
-#[register(address = IspuReg::IspuDout02H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout02H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout02H {
@@ -291,7 +292,7 @@ pub struct IspuDout02H {
 /// ISPU_DOUT_03_L (0x16)
 ///
 /// ISPU output register 03 low byte (R)
-#[register(address = IspuReg::IspuDout03L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout03L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout03L {
@@ -302,7 +303,7 @@ pub struct IspuDout03L {
 /// ISPU_DOUT_03_H (0x17)
 ///
 /// ISPU output register 03 high byte (R)
-#[register(address = IspuReg::IspuDout03H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout03H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout03H {
@@ -313,7 +314,7 @@ pub struct IspuDout03H {
 /// ISPU_DOUT_04_L (0x18)
 ///
 /// ISPU output register 04 low byte (R)
-#[register(address = IspuReg::IspuDout04L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout04L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout04L {
@@ -324,7 +325,7 @@ pub struct IspuDout04L {
 /// ISPU_DOUT_04_H (0x19)
 ///
 /// ISPU output register 04 high byte (R)
-#[register(address = IspuReg::IspuDout04H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout04H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout04H {
@@ -335,7 +336,7 @@ pub struct IspuDout04H {
 /// ISPU_DOUT_05_L (0x1A)
 ///
 /// ISPU output register 05 low byte (R)
-#[register(address = IspuReg::IspuDout05L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout05L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout05L {
@@ -346,7 +347,7 @@ pub struct IspuDout05L {
 /// ISPU_DOUT_05_H (0x1B)
 ///
 /// ISPU output register 05 high byte (R)
-#[register(address = IspuReg::IspuDout05H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout05H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout05H {
@@ -357,7 +358,7 @@ pub struct IspuDout05H {
 /// ISPU_DOUT_06_L (0x1C)
 ///
 /// ISPU output register 06 low byte (R)
-#[register(address = IspuReg::IspuDout06L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout06L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout06L {
@@ -368,7 +369,7 @@ pub struct IspuDout06L {
 /// ISPU_DOUT_06_H (0x1D)
 ///
 /// ISPU output register 06 high byte (R)
-#[register(address = IspuReg::IspuDout06H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout06H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout06H {
@@ -379,7 +380,7 @@ pub struct IspuDout06H {
 /// ISPU_DOUT_07_L (0x1E)
 ///
 /// ISPU output register 07 low byte (R)
-#[register(address = IspuReg::IspuDout07L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout07L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout07L {
@@ -390,7 +391,7 @@ pub struct IspuDout07L {
 /// ISPU_DOUT_07_H (0x1F)
 ///
 /// ISPU output register 07 high byte (R)
-#[register(address = IspuReg::IspuDout07H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout07H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout07H {
@@ -401,7 +402,7 @@ pub struct IspuDout07H {
 /// ISPU_DOUT_08_L (0x20)
 ///
 /// ISPU output register 08 low byte (R)
-#[register(address = IspuReg::IspuDout08L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout08L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout08L {
@@ -412,7 +413,7 @@ pub struct IspuDout08L {
 /// ISPU_DOUT_08_H (0x21)
 ///
 /// ISPU output register 08 high byte (R)
-#[register(address = IspuReg::IspuDout08H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout08H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout08H {
@@ -423,7 +424,7 @@ pub struct IspuDout08H {
 /// ISPU_DOUT_09_L (0x22)
 ///
 /// ISPU output register 09 low byte (R)
-#[register(address = IspuReg::IspuDout09L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout09L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout09L {
@@ -434,7 +435,7 @@ pub struct IspuDout09L {
 /// ISPU_DOUT_09_H (0x23)
 ///
 /// ISPU output register 09 high byte (R)
-#[register(address = IspuReg::IspuDout09H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout09H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout09H {
@@ -445,7 +446,7 @@ pub struct IspuDout09H {
 /// ISPU_DOUT_10_L (0x24)
 ///
 /// ISPU output register 10 low byte (R)
-#[register(address = IspuReg::IspuDout10L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout10L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout10L {
@@ -456,7 +457,7 @@ pub struct IspuDout10L {
 /// ISPU_DOUT_10_H (0x25)
 ///
 /// ISPU output register 10 high byte (R)
-#[register(address = IspuReg::IspuDout10H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout10H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout10H {
@@ -467,7 +468,7 @@ pub struct IspuDout10H {
 /// ISPU_DOUT_11_L (0x26)
 ///
 /// ISPU output register 11 low byte (R)
-#[register(address = IspuReg::IspuDout11L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout11L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout11L {
@@ -478,7 +479,7 @@ pub struct IspuDout11L {
 /// ISPU_DOUT_11_H (0x27)
 ///
 /// ISPU output register 11 high byte (R)
-#[register(address = IspuReg::IspuDout11H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout11H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout11H {
@@ -489,7 +490,7 @@ pub struct IspuDout11H {
 /// ISPU_DOUT_12_L (0x28)
 ///
 /// ISPU output register 12 low byte (R)
-#[register(address = IspuReg::IspuDout12L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout12L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout12L {
@@ -500,7 +501,7 @@ pub struct IspuDout12L {
 /// ISPU_DOUT_12_H (0x29)
 ///
 /// ISPU output register 12 high byte (R)
-#[register(address = IspuReg::IspuDout12H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout12H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout12H {
@@ -511,7 +512,7 @@ pub struct IspuDout12H {
 /// ISPU_DOUT_13_L (0x2A)
 ///
 /// ISPU output register 13 low byte (R)
-#[register(address = IspuReg::IspuDout13L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout13L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout13L {
@@ -522,7 +523,7 @@ pub struct IspuDout13L {
 /// ISPU_DOUT_13_H (0x2B)
 ///
 /// ISPU output register 13 high byte (R)
-#[register(address = IspuReg::IspuDout13H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout13H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout13H {
@@ -533,7 +534,7 @@ pub struct IspuDout13H {
 /// ISPU_DOUT_14_L (0x2C)
 ///
 /// ISPU output register 14 low byte (R)
-#[register(address = IspuReg::IspuDout14L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout14L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout14L {
@@ -544,7 +545,7 @@ pub struct IspuDout14L {
 /// ISPU_DOUT_14_H (0x2D)
 ///
 /// ISPU output register 14 high byte (R)
-#[register(address = IspuReg::IspuDout14H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout14H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout14H {
@@ -555,7 +556,7 @@ pub struct IspuDout14H {
 /// ISPU_DOUT_15_L (0x2E)
 ///
 /// ISPU output register 15 low byte (R)
-#[register(address = IspuReg::IspuDout15L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout15L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout15L {
@@ -566,7 +567,7 @@ pub struct IspuDout15L {
 /// ISPU_DOUT_15_H (0x2F)
 ///
 /// ISPU output register 15 high byte (R)
-#[register(address = IspuReg::IspuDout15H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout15H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout15H {
@@ -577,7 +578,7 @@ pub struct IspuDout15H {
 /// ISPU_DOUT_16_L (0x30)
 ///
 /// ISPU output register 16 low byte (R)
-#[register(address = IspuReg::IspuDout16L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout16L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout16L {
@@ -588,7 +589,7 @@ pub struct IspuDout16L {
 /// ISPU_DOUT_16_H (0x31)
 ///
 /// ISPU output register 16 high byte (R)
-#[register(address = IspuReg::IspuDout16H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout16H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout16H {
@@ -599,7 +600,7 @@ pub struct IspuDout16H {
 /// ISPU_DOUT_17_L (0x32)
 ///
 /// ISPU output register 17 low byte (R)
-#[register(address = IspuReg::IspuDout17L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout17L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout17L {
@@ -610,7 +611,7 @@ pub struct IspuDout17L {
 /// ISPU_DOUT_17_H (0x33)
 ///
 /// ISPU output register 17 high byte (R)
-#[register(address = IspuReg::IspuDout17H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout17H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout17H {
@@ -621,7 +622,7 @@ pub struct IspuDout17H {
 /// ISPU_DOUT_18_L (0x34)
 ///
 /// ISPU output register 18 low byte (R)
-#[register(address = IspuReg::IspuDout18L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout18L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout18L {
@@ -632,7 +633,7 @@ pub struct IspuDout18L {
 /// ISPU_DOUT_18_H (0x35)
 ///
 /// ISPU output register 18 high byte (R)
-#[register(address = IspuReg::IspuDout18H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout18H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout18H {
@@ -643,7 +644,7 @@ pub struct IspuDout18H {
 /// ISPU_DOUT_19_L (0x36)
 ///
 /// ISPU output register 19 low byte (R)
-#[register(address = IspuReg::IspuDout19L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout19L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout19L {
@@ -654,7 +655,7 @@ pub struct IspuDout19L {
 /// ISPU_DOUT_19_H (0x37)
 ///
 /// ISPU output register 19 high byte (R)
-#[register(address = IspuReg::IspuDout19H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout19H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout19H {
@@ -665,7 +666,7 @@ pub struct IspuDout19H {
 /// ISPU_DOUT_20_L (0x38)
 ///
 /// ISPU output register 20 low byte (R)
-#[register(address = IspuReg::IspuDout20L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout20L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout20L {
@@ -676,7 +677,7 @@ pub struct IspuDout20L {
 /// ISPU_DOUT_20_H (0x39)
 ///
 /// ISPU output register 20 high byte (R)
-#[register(address = IspuReg::IspuDout20H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout20H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout20H {
@@ -687,7 +688,7 @@ pub struct IspuDout20H {
 /// ISPU_DOUT_21_L (0x3A)
 ///
 /// ISPU output register 21 low byte (R)
-#[register(address = IspuReg::IspuDout21L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout21L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout21L {
@@ -698,7 +699,7 @@ pub struct IspuDout21L {
 /// ISPU_DOUT_21_H (0x3B)
 ///
 /// ISPU output register 21 high byte (R)
-#[register(address = IspuReg::IspuDout21H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout21H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout21H {
@@ -709,7 +710,7 @@ pub struct IspuDout21H {
 /// ISPU_DOUT_22_L (0x3C)
 ///
 /// ISPU output register 22 low byte (R)
-#[register(address = IspuReg::IspuDout22L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout22L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout22L {
@@ -720,7 +721,7 @@ pub struct IspuDout22L {
 /// ISPU_DOUT_22_H (0x3D)
 ///
 /// ISPU output register 22 high byte (R)
-#[register(address = IspuReg::IspuDout22H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout22H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout22H {
@@ -731,7 +732,7 @@ pub struct IspuDout22H {
 /// ISPU_DOUT_23_L (0x3E)
 ///
 /// ISPU output register 23 low byte (R)
-#[register(address = IspuReg::IspuDout23L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout23L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout23L {
@@ -742,7 +743,7 @@ pub struct IspuDout23L {
 /// ISPU_DOUT_23_H (0x3F)
 ///
 /// ISPU output register 23 high byte (R)
-#[register(address = IspuReg::IspuDout23H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout23H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout23H {
@@ -753,7 +754,7 @@ pub struct IspuDout23H {
 /// ISPU_DOUT_24_L (0x40)
 ///
 /// ISPU output register 24 low byte (R)
-#[register(address = IspuReg::IspuDout24L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout24L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout24L {
@@ -764,7 +765,7 @@ pub struct IspuDout24L {
 /// ISPU_DOUT_24_H (0x41)
 ///
 /// ISPU output register 24 high byte (R)
-#[register(address = IspuReg::IspuDout24H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout24H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout24H {
@@ -775,7 +776,7 @@ pub struct IspuDout24H {
 /// ISPU_DOUT_25_L (0x42)
 ///
 /// ISPU output register 25 low byte (R)
-#[register(address = IspuReg::IspuDout25L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout25L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout25L {
@@ -786,7 +787,7 @@ pub struct IspuDout25L {
 /// ISPU_DOUT_25_H (0x43)
 ///
 /// ISPU output register 25 high byte (R)
-#[register(address = IspuReg::IspuDout25H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout25H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout25H {
@@ -797,7 +798,7 @@ pub struct IspuDout25H {
 /// ISPU_DOUT_26_L (0x44)
 ///
 /// ISPU output register 26 low byte (R)
-#[register(address = IspuReg::IspuDout26L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout26L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout26L {
@@ -808,7 +809,7 @@ pub struct IspuDout26L {
 /// ISPU_DOUT_26_H (0x45)
 ///
 /// ISPU output register 26 high byte (R)
-#[register(address = IspuReg::IspuDout26H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout26H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout26H {
@@ -819,7 +820,7 @@ pub struct IspuDout26H {
 /// ISPU_DOUT_27_L (0x46)
 ///
 /// ISPU output register 27 low byte (R)
-#[register(address = IspuReg::IspuDout27L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout27L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout27L {
@@ -830,7 +831,7 @@ pub struct IspuDout27L {
 /// ISPU_DOUT_27_H (0x47)
 ///
 /// ISPU output register 27 high byte (R)
-#[register(address = IspuReg::IspuDout27H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout27H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout27H {
@@ -841,7 +842,7 @@ pub struct IspuDout27H {
 /// ISPU_DOUT_28_L (0x48)
 ///
 /// ISPU output register 28 low byte (R)
-#[register(address = IspuReg::IspuDout28L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout28L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout28L {
@@ -852,7 +853,7 @@ pub struct IspuDout28L {
 /// ISPU_DOUT_28_H (0x49)
 ///
 /// ISPU output register 28 high byte (R)
-#[register(address = IspuReg::IspuDout28H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout28H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout28H {
@@ -863,7 +864,7 @@ pub struct IspuDout28H {
 /// ISPU_DOUT_29_L (0x4A)
 ///
 /// ISPU output register 29 low byte (R)
-#[register(address = IspuReg::IspuDout29L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout29L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout29L {
@@ -874,7 +875,7 @@ pub struct IspuDout29L {
 /// ISPU_DOUT_29_H (0x4B)
 ///
 /// ISPU output register 29 high byte (R)
-#[register(address = IspuReg::IspuDout29H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout29H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout29H {
@@ -885,7 +886,7 @@ pub struct IspuDout29H {
 /// ISPU_DOUT_30_L (0x4C)
 ///
 /// ISPU output register 30 low byte (R)
-#[register(address = IspuReg::IspuDout30L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout30L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout30L {
@@ -896,7 +897,7 @@ pub struct IspuDout30L {
 /// ISPU_DOUT_30_H (0x4D)
 ///
 /// ISPU output register 30 high byte (R)
-#[register(address = IspuReg::IspuDout30H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout30H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout30H {
@@ -907,7 +908,7 @@ pub struct IspuDout30H {
 /// ISPU_DOUT_31_L (0x4E)
 ///
 /// ISPU output register 31 low byte (R)
-#[register(address = IspuReg::IspuDout31L, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout31L, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout31L {
@@ -918,7 +919,7 @@ pub struct IspuDout31L {
 /// ISPU_DOUT_31_H (0x4F)
 ///
 /// ISPU output register 31 high byte (R)
-#[register(address = IspuReg::IspuDout31H, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuDout31H, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuDout31H {
@@ -931,11 +932,11 @@ pub struct IspuDout31H {
 /// ISPU INT1 configuration registers (R/W)
 /// These registers route 30-bit interrupt flags from ISPU_INT_STATUS registers to the INT1 pin.
 /// Note: INT1_ISPU must be set to 1 to enable routing.
-#[register(address = IspuReg::IspuInt1Ctrl0, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuInt1Ctrl0, access_type = "Ism330is<B, T, IspuBank>")]
 pub struct IspuInt1Ctrl(pub u32);
 
 /// ISPU_INT1_CTRL0 (0x50)
-#[register(address = IspuReg::IspuInt1Ctrl0, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuInt1Ctrl0, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuInt1Ctrl0 {
@@ -944,7 +945,7 @@ pub struct IspuInt1Ctrl0 {
 }
 
 /// ISPU_INT1_CTRL1 (0x51)
-#[register(address = IspuReg::IspuInt1Ctrl1, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuInt1Ctrl1, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuInt1Ctrl1 {
@@ -953,7 +954,7 @@ pub struct IspuInt1Ctrl1 {
 }
 
 /// ISPU_INT1_CTRL2 (0x52)
-#[register(address = IspuReg::IspuInt1Ctrl2, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuInt1Ctrl2, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuInt1Ctrl2 {
@@ -962,7 +963,7 @@ pub struct IspuInt1Ctrl2 {
 }
 
 /// ISPU_INT1_CTRL3 (0x53)
-#[register(address = IspuReg::IspuInt1Ctrl3, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuInt1Ctrl3, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuInt1Ctrl3 {
@@ -977,11 +978,11 @@ pub struct IspuInt1Ctrl3 {
 /// ISPU INT2 configuration registers (R/W)
 /// These registers route 30-bit interrupt flags from ISPU_INT_STATUS registers to the INT2 pin.
 /// Note: INT2_ISPU must be set to 1 to enable routing.
-#[register(address = IspuReg::IspuInt2Ctrl0, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuInt2Ctrl0, access_type = "Ism330is<B, T, IspuBank>")]
 pub struct IspuInt2Ctrl(pub u32);
 
 /// ISPU_INT2_CTRL0 (0x54)
-#[register(address = IspuReg::IspuInt2Ctrl0, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuInt2Ctrl0, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuInt2Ctrl0 {
@@ -990,7 +991,7 @@ pub struct IspuInt2Ctrl0 {
 }
 
 /// ISPU_INT2_CTRL1 (0x55)
-#[register(address = IspuReg::IspuInt2Ctrl1, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuInt2Ctrl1, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuInt2Ctrl1 {
@@ -999,7 +1000,7 @@ pub struct IspuInt2Ctrl1 {
 }
 
 /// ISPU_INT2_CTRL2 (0x56)
-#[register(address = IspuReg::IspuInt2Ctrl2, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuInt2Ctrl2, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuInt2Ctrl2 {
@@ -1008,7 +1009,7 @@ pub struct IspuInt2Ctrl2 {
 }
 
 /// ISPU_INT2_CTRL3 (0x57)
-#[register(address = IspuReg::IspuInt2Ctrl3, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuInt2Ctrl3, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuInt2Ctrl3 {
@@ -1022,11 +1023,11 @@ pub struct IspuInt2Ctrl3 {
 ///
 /// ISPU interrupt status registers (R)
 /// Each register contains 8 bits of the 30-bit interrupt flags from ISPU.
-#[register(address = IspuReg::IspuIntStatus0, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuIntStatus0, access_type = "Ism330is<B, T, IspuBank>")]
 pub struct IspuIntStatus(pub u32);
 
 /// ISPU_INT_STATUS0 (0x58)
-#[register(address = IspuReg::IspuIntStatus0, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuIntStatus0, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuIntStatus0 {
@@ -1035,7 +1036,7 @@ pub struct IspuIntStatus0 {
 }
 
 /// ISPU_INT_STATUS1 (0x59)
-#[register(address = IspuReg::IspuIntStatus1, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuIntStatus1, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuIntStatus1 {
@@ -1044,7 +1045,7 @@ pub struct IspuIntStatus1 {
 }
 
 /// ISPU_INT_STATUS2 (0x5A)
-#[register(address = IspuReg::IspuIntStatus2, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuIntStatus2, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuIntStatus2 {
@@ -1053,7 +1054,7 @@ pub struct IspuIntStatus2 {
 }
 
 /// ISPU_INT_STATUS3 (0x5B)
-#[register(address = IspuReg::IspuIntStatus3, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuIntStatus3, access_type = "Ism330is<B, T, IspuBank>")]
 #[cfg_attr(feature = "bit_order_msb", bitfield(u8, order = Msb))]
 #[cfg_attr(not(feature = "bit_order_msb"), bitfield(u8, order = Lsb))]
 pub struct IspuIntStatus3 {
@@ -1069,7 +1070,7 @@ pub struct IspuIntStatus3 {
 /// Enable configurations to run up to 30 independent algorithms.
 /// Each bit corresponds to an algorithm; setting bit i=1 generates IRQ for ISPU_ALGO_(i-1).
 /// Bit remains set until algorithm routine completes.
-#[register(address = IspuReg::IspuAlgo0, access_type = IspuState, generics = 2)]
+#[register(address = IspuReg::IspuAlgo0, access_type = "Ism330is<B, T, IspuBank>")]
 pub struct IspuAlgo(pub u32);
 
 /// ISPU boot latched mode

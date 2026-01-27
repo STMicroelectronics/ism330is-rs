@@ -2,12 +2,12 @@ pub mod ispu;
 pub mod main;
 pub mod sensor_hub;
 
-use crate::Error;
-use crate::Ism330is;
-use embedded_hal::delay::DelayNs;
-use ispu::IspuMemAddr;
+use super::{
+    BusOperation, DelayNs, Error, Ism330is, MemBankFunctions, RegisterOperation, bisync,
+    only_async, only_sync, register::ispu::IspuMemAddr,
+};
+
 use st_mem_bank_macro::mem_bank;
-use st_mems_bus::{BusOperation, MemBankFunctions};
 
 /// Memory bank selection for register access
 ///
@@ -20,19 +20,20 @@ pub enum MemBank {
     #[main]
     MainMemBank = 0x0,
     /// Sensor hub memory bank
-    #[state(SensorHubState, fn_name = "operate_over_sensor_hub")]
+    #[state(SensorHubBank, fn_name = "operate_over_sensor_hub")]
     SensorHubMemBank = 0x2,
     /// ISPU memory bank
-    #[state(IspuState, fn_name = "operate_over_ispu")]
+    #[state(IspuBank, fn_name = "operate_over_ispu")]
     IspuMemBank = 0x3,
 }
 
-impl<B, T> IspuState<'_, B, T>
+#[bisync]
+impl<B, T> Ism330is<B, T, IspuBank>
 where
     B: BusOperation,
     T: DelayNs,
 {
-    pub fn ispu_sel_memory_addr(&mut self, mem_addr: u16) -> Result<(), Error<B::Error>> {
-        IspuMemAddr(mem_addr).write(self)
+    pub async fn ispu_sel_memory_addr(&mut self, mem_addr: u16) -> Result<(), Error<B::Error>> {
+        IspuMemAddr(mem_addr).write(self).await
     }
 }
