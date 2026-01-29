@@ -1,8 +1,10 @@
 use super::{
     BusOperation, DelayNs, I2c, MemBankFunctions, RegisterOperation, SensorOperation,
-    SevenBitAddress, SpiDevice, bisync, i2c, only_async, only_sync, prelude::*,
-    register::BankState, spi,
+    SevenBitAddress, SpiDevice, bisync, i2c, prelude::*, register::BankState, spi,
 };
+
+#[cfg(feature = "passthrough")]
+use super::{only_async, only_sync};
 
 use core::fmt::Debug;
 use core::marker::PhantomData;
@@ -1582,6 +1584,7 @@ where
 }
 
 #[only_async]
+#[cfg(feature = "passthrough")]
 // Ism330is acts like a bus when become the master of the sensor hub.
 impl<B, T> BusOperation for Ism330isPassthrough<'_, B, T>
 where

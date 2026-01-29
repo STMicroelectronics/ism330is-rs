@@ -13,6 +13,9 @@ description = """
     support, programmable interrupts, and ultra-low-power operation.
 """
 
+[lib]
+doctest = false
+
 [dependencies]
 bisync = "0.3.0"
 embedded-hal = "1.0.0"
