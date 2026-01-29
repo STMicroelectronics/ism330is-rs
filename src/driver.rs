@@ -1426,7 +1426,7 @@ impl<B: BusOperation, T: DelayNs> Ism330isMaster<B, T> {
         }
     }
 
-    pub fn borrow_mut(&self) -> RefMut<Ism330is<B, T, MainBank>> {
+    pub fn borrow_mut(&self) -> RefMut<'_, Ism330is<B, T, MainBank>> {
         self.sensor.borrow_mut()
     }
 
