@@ -3,18 +3,8 @@ use super::{
     SevenBitAddress, SpiDevice, bisync, i2c, prelude::*, register::BankState, spi,
 };
 
-#[cfg(feature = "passthrough")]
-use super::{only_async, only_sync};
-
 use core::fmt::Debug;
 use core::marker::PhantomData;
-
-#[cfg(feature = "passthrough")]
-#[only_sync]
-use core::cell::RefCell;
-#[cfg(feature = "passthrough")]
-#[only_sync]
-use core::cell::RefMut;
 
 /// Driver for the Ism330is sensor.
 ///
@@ -726,7 +716,9 @@ impl<B: BusOperation, T: DelayNs> Ism330is<B, T, MainBank> {
 
     /// Get the actual number of external sensors configured to be read by the sensor hub.
     pub async fn sh_slave_connected_get(&mut self) -> Result<ShSlaveConnected, Error<B::Error>> {
-        let master_config = self.operate_over_sensor_hub(MasterConfig::read).await?;
+        let master_config = self
+            .operate_over_sensor_hub(async |lock| MasterConfig::read(lock).await)
+            .await?;
 
         let aux_sens_on = master_config.aux_sens_on();
         let val = ShSlaveConnected::try_from(aux_sens_on).unwrap_or_default();
@@ -1125,7 +1117,9 @@ impl<B: BusOperation, T: DelayNs> Ism330is<B, T, MainBank> {
 
     /// Get the latched ISPU interrupt configuration (enable/disable).
     pub async fn ispu_int_latched_get(&mut self) -> Result<IspuInterrupt, Error<B::Error>> {
-        let ispu_config = self.operate_over_ispu(IspuConfig::read).await?;
+        let ispu_config = self
+            .operate_over_ispu(async |lock| IspuConfig::read(lock).await)
+            .await?;
 
         let val = ispu_config.latched();
         Ok(IspuInterrupt::try_from(val).unwrap_or_default())
@@ -1408,154 +1402,10 @@ pub fn from_lsb_to_celsius(lsb: i16) -> f32 {
 }
 
 #[cfg(feature = "passthrough")]
-#[only_sync]
-pub struct Ism330isMaster<B, T>
-where
-    B: BusOperation,
-    T: DelayNs,
-{
-    pub sensor: RefCell<Ism330is<B, T, MainBank>>,
-}
-
-#[cfg(feature = "passthrough")]
-#[only_sync]
-impl<B: BusOperation, T: DelayNs> Ism330isMaster<B, T> {
-    pub fn from_bus(bus: B, tim: T) -> Self {
-        Self {
-            sensor: RefCell::new(Ism330is::from_bus(bus, tim)),
-        }
-    }
-
-    pub fn borrow_mut(&self) -> RefMut<'_, Ism330is<B, T, MainBank>> {
-        self.sensor.borrow_mut()
-    }
-
-    /// Generates a wrapper for the sensor to enable its use as a passthrough
-    /// from another sensor.
-    ///
-    /// The Sensor Hub may require this setup to redirect writes from the
-    /// bus to the sensor that executes them as a passthrough.
-    pub fn as_passthrough<'a>(&'a self, address: SevenBitAddress) -> Ism330isPassthrough<'a, B, T> {
-        Ism330isPassthrough {
-            sensor: &self.sensor,
-            slave_address: address,
-        }
-    }
-}
-
-#[cfg(feature = "passthrough")]
-#[only_sync]
-pub struct Ism330isPassthrough<'a, B, T>
-where
-    B: BusOperation,
-    T: DelayNs,
-{
-    sensor: &'a RefCell<Ism330is<B, T, MainBank>>,
-    slave_address: SevenBitAddress,
-}
-
-#[cfg(feature = "passthrough")]
-#[only_sync]
-// Ism330is acts like a bus when become the master of the sensor hub.
-impl<B, T> BusOperation for Ism330isPassthrough<'_, B, T>
-where
-    B: BusOperation,
-    T: DelayNs,
-{
-    type Error = Error<B::Error>;
-
-    fn read_bytes(&mut self, _rbuf: &mut [u8]) -> Result<(), Self::Error> {
-        Err(Error::UnexpectedValue)
-    }
-
-    fn write_bytes(&mut self, wbuf: &[u8]) -> Result<(), Self::Error> {
-        let mut master = self.sensor.borrow_mut();
-        let mut sh_cfg_write = ShCfgWrite::default();
-
-        for i in 1_u8..(wbuf.len() as u8) {
-            // Configure Sensor Hub to read data
-            sh_cfg_write.slv0_add = self.slave_address;
-            sh_cfg_write.slv0_subadd = wbuf[0] + i - 1;
-            sh_cfg_write.slv0_data = wbuf[i as usize];
-            master.sh_cfg_write(sh_cfg_write)?;
-
-            // Disable accelerometer
-            master.xl_data_rate_set(XlDataRate::Off)?;
-            // Enable I2C Master
-            master.sh_master_set(1)?;
-            // Enable accelerometer to trigger Sensor Hub operation.
-            master.xl_data_rate_set(XlDataRate::_26hzHp)?;
-            // Wait Sensor Hub operation flag set.
-            let _dummy = master.acceleration_raw_get();
-
-            let mut drdy = 0;
-            while drdy == 0 {
-                master.tim.delay_ms(20);
-                drdy = master.xl_flag_data_ready_get()?;
-            }
-
-            let mut end_op = 0;
-            while end_op == 0 {
-                master.tim.delay_ms(20);
-                end_op = master.sh_status_get()?.sens_hub_endop();
-            }
-
-            // Disable I2C master and XL (triger).
-            master.sh_master_set(0)?;
-            master.xl_data_rate_set(XlDataRate::Off)?;
-        }
-
-        Ok(())
-    }
-
-    fn write_byte_read_bytes(
-        &mut self,
-        wbuf: &[u8; 1],
-        rbuf: &mut [u8],
-    ) -> Result<(), Self::Error> {
-        let mut master = self.sensor.borrow_mut();
-        // Disable accelerometer
-        master.xl_data_rate_set(XlDataRate::Off)?;
-        // Configure Sensor Hub to read
-        let sh_cfg_read = ShCfgRead {
-            slv_add: self.slave_address,
-            slv_subadd: wbuf[0],
-            slv_len: rbuf.len() as u8,
-        };
-        master.sh_slv_cfg_read(0, &sh_cfg_read)?; // dummy read
-        master.sh_slave_connected_set(ShSlaveConnected::_01)?;
-        // Enable I2C Master
-        master.sh_master_set(1)?;
-        // Enable accelerometer to trigger Sensor Hub operation.
-        master.xl_data_rate_set(XlDataRate::_26hzHp)?;
-        // Wait Sensor Hub operation flag set
-        let _dummy = master.acceleration_raw_get()?;
-
-        let mut drdy = 0;
-        while drdy == 0 {
-            master.tim.delay_ms(20);
-            drdy = master.xl_flag_data_ready_get()?;
-        }
-
-        let mut end_op = 0;
-        while end_op == 0 {
-            //master.tim.delay_ms(20);
-            end_op = master.sh_status_get()?.sens_hub_endop();
-        }
-
-        // Disable I2C master and XL(trigger)
-        master.sh_master_set(0)?;
-        master.xl_data_rate_set(XlDataRate::Off)?;
-
-        // Read SensorHub registers
-        master.sh_read_data_raw_get(rbuf)?;
-
-        Ok(())
-    }
-}
-
-#[cfg(feature = "passthrough")]
-#[only_async]
+/// Ism330isPassthrough
+///
+/// Encapsulate the sensor as a bus that could be used inside another sensor
+/// to provide passthrough capability
 pub struct Ism330isPassthrough<'a, B, T>
 where
     B: BusOperation,
@@ -1566,7 +1416,6 @@ where
 }
 
 #[cfg(feature = "passthrough")]
-#[only_async]
 impl<'a, B, T> Ism330isPassthrough<'a, B, T>
 where
     B: BusOperation,
@@ -1583,8 +1432,8 @@ where
     }
 }
 
-#[only_async]
 #[cfg(feature = "passthrough")]
+#[bisync]
 // Ism330is acts like a bus when become the master of the sensor hub.
 impl<B, T> BusOperation for Ism330isPassthrough<'_, B, T>
 where
@@ -1598,8 +1447,8 @@ where
     }
 
     async fn write_bytes(&mut self, wbuf: &[u8]) -> Result<(), Self::Error> {
-        let mut sh_cfg_write = ShCfgWrite::default();
         let master = &mut self.sensor;
+        let mut sh_cfg_write = ShCfgWrite::default();
 
         for i in 1_u8..(wbuf.len() as u8) {
             // Configure Sensor Hub to read data
