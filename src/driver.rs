@@ -716,9 +716,7 @@ impl<B: BusOperation, T: DelayNs> Ism330is<B, T, MainBank> {
 
     /// Get the actual number of external sensors configured to be read by the sensor hub.
     pub async fn sh_slave_connected_get(&mut self) -> Result<ShSlaveConnected, Error<B::Error>> {
-        let master_config = self
-            .operate_over_sensor_hub(async |lock| MasterConfig::read(lock).await)
-            .await?;
+        let master_config = self.operate_over_sensor_hub(MasterConfig::read).await?;
 
         let aux_sens_on = master_config.aux_sens_on();
         let val = ShSlaveConnected::try_from(aux_sens_on).unwrap_or_default();
@@ -1117,9 +1115,7 @@ impl<B: BusOperation, T: DelayNs> Ism330is<B, T, MainBank> {
 
     /// Get the latched ISPU interrupt configuration (enable/disable).
     pub async fn ispu_int_latched_get(&mut self) -> Result<IspuInterrupt, Error<B::Error>> {
-        let ispu_config = self
-            .operate_over_ispu(async |lock| IspuConfig::read(lock).await)
-            .await?;
+        let ispu_config = self.operate_over_ispu(IspuConfig::read).await?;
 
         let val = ispu_config.latched();
         Ok(IspuInterrupt::try_from(val).unwrap_or_default())
