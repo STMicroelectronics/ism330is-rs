@@ -17,7 +17,7 @@ description = """
 doctest = false
 
 [dependencies]
-bisync = "0.3.0"
+bisync2 = "0.3.2"
 embedded-hal = "1.0.0"
 embedded-hal-async = "1.0.0"
 bitfield-struct = "0.10.0"
